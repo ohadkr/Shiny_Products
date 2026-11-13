@@ -123,11 +123,13 @@ function ProductCard({
   index,
   quantityInCart,
   onAdd,
+  onAdjust,
 }: {
   product: Product;
   index: number;
   quantityInCart: number;
   onAdd: (product: Product) => void;
+  onAdjust: (sku: string, direction: -1 | 1) => void;
 }) {
   const category = getCategory(product.description);
   const number = String(index + 1).padStart(2, "0");
@@ -171,18 +173,45 @@ function ProductCard({
             </span>
           )}
         </div>
-        <button
-          className="add-to-cart"
-          type="button"
-          onClick={() => onAdd(product)}
-        >
-          <span>
-            {quantityInCart > 0
-              ? `+ הוספה (${quantityInCart} בעגלה)`
-              : "+ הוספה לעגלה"}
-          </span>
-          <span className="add-multiple">כפולות של {orderMultiple}</span>
-        </button>
+        {quantityInCart > 0 ? (
+          <div className="product-cart-controls">
+            <div className="product-quantity-control">
+              <button
+                type="button"
+                aria-label={`הפחתת כמות ${product.description}${quantityInCart === orderMultiple ? ", הסרת הפריט מהעגלה" : ""}`}
+                title={
+                  quantityInCart === orderMultiple
+                    ? "הסרת הפריט מהעגלה"
+                    : "הפחתת אריזה אחת"
+                }
+                onClick={() => onAdjust(product.sku, -1)}
+              >
+                −
+              </button>
+              <span className="product-quantity" aria-live="polite">
+                {quantityInCart}
+              </span>
+              <button
+                type="button"
+                aria-label={`הוספת כמות ${product.description}`}
+                title="הוספת אריזה אחת"
+                onClick={() => onAdjust(product.sku, 1)}
+              >
+                +
+              </button>
+            </div>
+            <span className="add-multiple">בעגלה · כפולות של {orderMultiple}</span>
+          </div>
+        ) : (
+          <button
+            className="add-to-cart"
+            type="button"
+            onClick={() => onAdd(product)}
+          >
+            <span>+ הוספה לעגלה</span>
+            <span className="add-multiple">כפולות של {orderMultiple}</span>
+          </button>
+        )}
       </div>
     </article>
   );
@@ -331,7 +360,7 @@ function App() {
 
   function adjustCartQuantity(sku: string, direction: -1 | 1) {
     setCart((items) =>
-      items.map((item) => {
+      items.flatMap((item) => {
         if (item.product.sku !== sku) {
           return item;
         }
@@ -347,7 +376,11 @@ function App() {
           ? quantity + direction * multiple
           : direction === 1
             ? Math.ceil(quantity / multiple) * multiple || multiple
-            : Math.max(multiple, Math.floor(quantity / multiple) * multiple);
+            : Math.floor(quantity / multiple) * multiple;
+
+        if (nextQuantity <= 0) {
+          return [];
+        }
 
         return {
           ...item,
@@ -370,12 +403,7 @@ function App() {
           aria-label="שייני - חזרה לראש העמוד"
           id="top"
         >
-          <span className="brand-mark" aria-hidden="true">
-            <svg viewBox="0 0 32 32" fill="none">
-              <path d="M16 3 19.2 12.8 29 16l-9.8 3.2L16 29l-3.2-9.8L3 16l9.8-3.2L16 3Z" />
-            </svg>
-          </span>
-          <span className="brand-word">שייני</span>
+          <img className="brand-logo" src="/shiny-logo.png" alt="Shiny" />
           <span className="brand-divider" />
           <span className="brand-caption">מוצרי ניקיון</span>
         </a>
@@ -513,6 +541,7 @@ function App() {
                   ) || 0
                 }
                 onAdd={addToCart}
+                onAdjust={adjustCartQuantity}
               />
             ))}
           </div>
@@ -548,7 +577,9 @@ function App() {
       </section>
 
       <footer className="site-footer">
-        <a className="footer-brand" href="#top">שייני<span>✳</span></a>
+        <a className="footer-brand" href="#top" aria-label="שייני - חזרה לראש העמוד">
+          <img src="/shiny-logo.png" alt="Shiny" />
+        </a>
         <span>עושים מקום לניקיון טוב יותר.</span>
         <a href="#top">בחזרה למעלה ↑</a>
       </footer>
