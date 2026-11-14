@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="500" height="500" viewBox="0 0 500 500">
+  <title>גליל מפה כחול שמיים 25 מ'</title>
+  <circle cx="250" cy="211" r="145" fill="#74BFE5" stroke="#d7d4ce" stroke-width="2"/>
+  <text x="250" y="424" text-anchor="middle" direction="rtl" unicode-bidi="plaintext" font-family="Arial, sans-serif" font-size="36" font-weight="700" fill="#3b342d">25 מטר</text>
+</svg>

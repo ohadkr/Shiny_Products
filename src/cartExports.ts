@@ -10,6 +10,12 @@ export type CartExportRow = {
   lineTotal: number | null;
 };
 
+export type CartExportTotals = {
+  subtotal: number;
+  vat: number;
+  totalWithVat: number;
+};
+
 function escapeXml(value: string) {
   return value
     .replaceAll("&", "&amp;")
@@ -40,7 +46,10 @@ function numberCell(reference: string, value: number) {
   return `<c r="${reference}"><v>${value}</v></c>`;
 }
 
-export function createCartWorkbook(rows: CartExportRow[], total: number) {
+export function createCartWorkbook(
+  rows: CartExportRow[],
+  totals: CartExportTotals,
+) {
   const headers = [
     "מק״ט",
     "תיאור מוצר",
@@ -70,7 +79,9 @@ export function createCartWorkbook(rows: CartExportRow[], total: number) {
 
       return `<row r="${excelRow}">${cells.join("")}</row>`;
     }),
-    `<row r="${rows.length + 2}">${textCell(`F${rows.length + 2}`, "סה״כ לפריטים עם מחיר (₪)")}${numberCell(`G${rows.length + 2}`, total)}</row>`,
+    `<row r="${rows.length + 2}">${textCell(`F${rows.length + 2}`, "סה״כ לפני מע״מ (₪)")}${numberCell(`G${rows.length + 2}`, totals.subtotal)}</row>`,
+    `<row r="${rows.length + 3}">${textCell(`F${rows.length + 3}`, "מע״מ 18% (₪)")}${numberCell(`G${rows.length + 3}`, totals.vat)}</row>`,
+    `<row r="${rows.length + 4}">${textCell(`F${rows.length + 4}`, "סה״כ כולל מע״מ (₪)")}${numberCell(`G${rows.length + 4}`, totals.totalWithVat)}</row>`,
   ];
 
   const files: Record<string, Uint8Array> = {
@@ -123,8 +134,11 @@ function getFileDate() {
   return new Date().toISOString().slice(0, 10);
 }
 
-export function downloadCartExcel(rows: CartExportRow[], total: number) {
-  const data = createCartWorkbook(rows, total);
+export function downloadCartExcel(
+  rows: CartExportRow[],
+  totals: CartExportTotals,
+) {
+  const data = createCartWorkbook(rows, totals);
   downloadFile(
     new Blob([data], {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

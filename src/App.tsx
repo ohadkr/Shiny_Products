@@ -20,65 +20,234 @@ type CartItem = {
   quantity: string;
 };
 
-type CategoryId =
-  | "all"
+type SortOrder = "catalog" | "name" | "price-asc" | "price-desc" | "sku";
+
+type CategoryGroupId =
   | "cloths"
-  | "wipes"
-  | "scrubbers"
-  | "tools"
-  | "bags"
+  | "scrubbing"
+  | "kitchen"
+  | "bags-laundry"
+  | "cleaning"
+  | "home"
+  | "health";
+
+type ProductCategoryId =
+  | "wet-cloths"
+  | "microfiber"
+  | "floor-cloths"
+  | "multi-cloths"
+  | "scrub-pads"
+  | "scourer-rolls"
+  | "steel-wool"
+  | "sponges"
+  | "tablecloths"
   | "gloves"
+  | "trash-bags"
+  | "cotton-buds"
+  | "clothespins"
+  | "toothpicks"
+  | "skewers"
+  | "candles"
+  | "foil"
+  | "kitchen-products"
+  | "storage"
+  | "laundry"
+  | "air-fresheners"
+  | "brushes-brooms"
+  | "mops"
+  | "handles"
+  | "dustpans"
+  | "silicone"
+  | "toilet-tools"
+  | "buckets-bins"
+  | "cleaning-accessories"
+  | "aprons-hats"
+  | "stirrers"
+  | "dispensers"
+  | "pharmacy"
   | "other";
+
+type CategoryId = "all" | CategoryGroupId | ProductCategoryId;
+
+type CategoryGroup = {
+  id: CategoryGroupId;
+  label: string;
+  categories: ProductCategoryId[];
+};
 
 const products: Product[] = productsData;
 const productImageBySku: Record<string, string> = productImages;
 const PAGE_SIZE = 24;
+const VAT_RATE = 0.18;
+const sortOptions: { value: SortOrder; label: string }[] = [
+  { value: "catalog", label: "סדר הקטלוג" },
+  { value: "name", label: "שם מוצר (א–ת)" },
+  { value: "price-asc", label: "מחיר: מהנמוך לגבוה" },
+  { value: "price-desc", label: "מחיר: מהגבוה לנמוך" },
+  { value: "sku", label: "מק״ט" },
+];
 
-const categoryLabels: Record<CategoryId, string> = {
-  all: "כל המוצרים",
-  cloths: "מטליות ומגבות",
-  wipes: "מגבונים",
-  scrubbers: "ספוגים וקרצוף",
-  tools: "כלי ניקיון",
-  bags: "שקיות",
+const categoryLabels: Record<ProductCategoryId, string> = {
+  "wet-cloths": "מטליות לחות",
+  microfiber: "מטליות מיקרופייבר",
+  "floor-cloths": "סחבות לרצפה",
+  "multi-cloths": "מטליות רב שימושיות",
+  "scrub-pads": "כריות קרצוף כלים",
+  "scourer-rolls": "סרטי קרצוף (סקוטש)",
+  "steel-wool": "קרצוף מקצועי",
+  sponges: "ספוגי ניקוי ורחצה",
+  tablecloths: "מפות שולחן",
   gloves: "כפפות",
+  "trash-bags": "שקיות אשפה",
+  "cotton-buds": "צמרוני כותנה",
+  clothespins: "אטבי כביסה",
+  toothpicks: "קיסמי שיניים",
+  skewers: "שיפודים ומדליקי גחלים",
+  candles: "נרות",
+  foil: "רדידי אלומיניום",
+  "kitchen-products": "מוצרים למטבח",
+  storage: "שקיות ואחסון",
+  laundry: "אביזרי כביסה",
+  "air-fresheners": "מבשמי אוויר",
+  "brushes-brooms": "מברשות ומטאטאים",
+  mops: "מגבים",
+  handles: "מקלות מטאטא ומגב",
+  dustpans: "יעים",
+  silicone: "מוצרי סיליקון",
+  "toilet-tools": "מברשות אסלה ופומפות",
+  "buckets-bins": "דליים ופחים",
+  "cleaning-accessories": "אביזרי ניקיון",
+  "aprons-hats": "סינרים וכובעים",
+  stirrers: "בוחשנים לשתייה",
+  dispensers: "מתקני סבון ונייר",
+  pharmacy: "מוצרי פארם",
   other: "מוצרים נוספים",
 };
 
-const categoryOrder: CategoryId[] = [
-  "all",
-  "cloths",
-  "wipes",
-  "scrubbers",
-  "tools",
-  "bags",
-  "gloves",
-  "other",
+const categoryGroups: CategoryGroup[] = [
+  {
+    id: "cloths",
+    label: "מטליות וניגוב",
+    categories: ["multi-cloths", "floor-cloths", "microfiber", "wet-cloths"],
+  },
+  {
+    id: "scrubbing",
+    label: "ספוגים וקרצוף",
+    categories: ["scrub-pads", "scourer-rolls", "steel-wool", "sponges"],
+  },
+  {
+    id: "kitchen",
+    label: "מטבח ואירוח",
+    categories: [
+      "tablecloths",
+      "gloves",
+      "cotton-buds",
+      "toothpicks",
+      "skewers",
+      "candles",
+      "foil",
+      "kitchen-products",
+    ],
+  },
+  {
+    id: "bags-laundry",
+    label: "שקיות וכביסה",
+    categories: ["trash-bags", "storage", "clothespins", "laundry"],
+  },
+  {
+    id: "cleaning",
+    label: "כלי ניקיון",
+    categories: [
+      "brushes-brooms",
+      "mops",
+      "handles",
+      "dustpans",
+      "silicone",
+      "toilet-tools",
+      "buckets-bins",
+      "cleaning-accessories",
+    ],
+  },
+  {
+    id: "home",
+    label: "מוצרים לבית",
+    categories: ["air-fresheners", "aprons-hats", "stirrers", "dispensers", "other"],
+  },
+  {
+    id: "health",
+    label: "פארם",
+    categories: ["pharmacy"],
+  },
 ];
 
-function getCategory(description: string): CategoryId {
-  const name = description.toLowerCase();
+const categoryRules: { id: ProductCategoryId; pattern: RegExp }[] = [
+  { id: "wet-cloths", pattern: /מגבונים|מגבון|לחות לרצפה|לח לרצפה|נייר טואלט לח/ },
+  { id: "microfiber", pattern: /מיקרופייבר/ },
+  { id: "floor-cloths", pattern: /סחב|סחבות/ },
+  { id: "multi-cloths", pattern: /מטלית|מטליות|מגבת|מגבות|גליל מטליות/ },
+  { id: "scrub-pads", pattern: /כרית|כריות/ },
+  { id: "scourer-rolls", pattern: /סקוטש|סרטי? קרצוף/ },
+  { id: "steel-wool", pattern: /צמר פלדה|ברזליות|ממרקות/ },
+  { id: "sponges", pattern: /ספוג|ספונג/ },
+  { id: "tablecloths", pattern: /מפה|מפת|מפות/ },
+  { id: "gloves", pattern: /כפפה|כפפות/ },
+  { id: "trash-bags", pattern: /אשפה|שקיות זבל|שקית זבל/ },
+  { id: "cotton-buds", pattern: /צמרוני|מקלוני אוזניים/ },
+  { id: "clothespins", pattern: /אטב|אטבים/ },
+  { id: "toothpicks", pattern: /קיסמ|קיסם/ },
+  { id: "skewers", pattern: /שיפוד|מדליק גחלים/ },
+  { id: "candles", pattern: /נרות|נר / },
+  { id: "foil", pattern: /רדיד|אלומיניום|נייר כסף/ },
+  {
+    id: "kitchen-products",
+    pattern: /מטבח|קופס|ואקום|וואקום|ניילון נצמד|נייר אפייה|אפייה|מפיות|כפיות|מצע לייבוש|PVC|EVA|סנדוויץ|הקפאה/,
+  },
+  {
+    id: "storage",
+    pattern: /שקית|שקיות|כיסוי|קליפסים|אחסון/,
+  },
+  { id: "laundry", pattern: /חבל כביסה|קולב|כביסה/ },
+  {
+    id: "toilet-tools",
+    pattern: /אסלה|פומפה|שירותים|שרותים|משתנות/,
+  },
+  {
+    id: "air-fresheners",
+    pattern: /מבשם|מבשמי|מפיץ ריח|ריחני|מטהר אויר|מטהר אוויר/,
+  },
+  { id: "brushes-brooms", pattern: /מברשת|מברשות|מטאטא/ },
+  { id: "mops", pattern: /מגב/ },
+  { id: "handles", pattern: /מקל/ },
+  { id: "dustpans", pattern: /יעה|כף אשפה/ },
+  { id: "silicone", pattern: /סיליקון|VIVIAN|ויויאן/i },
+  { id: "buckets-bins", pattern: /דלי|דליים|פח|פחים|סל נייר|סל כביסה|סל / },
+  { id: "cleaning-accessories", pattern: /מרסס|תרסיס|בקבוק מרסס/ },
+  { id: "aprons-hats", pattern: /סינר|כובע/ },
+  { id: "stirrers", pattern: /בוחש|מערבל/ },
+  { id: "dispensers", pattern: /מתקן|דיספנסר|נייר טואלט|נייר מגבת|ממחטות|טישיו/ },
+  {
+    id: "pharmacy",
+    pattern: /Farma|פלסטר|אלכוהול|חיטוי|מסכה|תחבושת|פד |אגד |מד חום|עזרה ראשונה|צמר גפן/i,
+  },
+];
 
-  if (/מגבונים|מגבון|לח(ים|ות) לרצפה|נייר טואלט לח/.test(name)) {
-    return "wipes";
-  }
-  if (/מטליות|מטלית|מגבת|סחבה|גליל מטליות/.test(name)) {
-    return "cloths";
-  }
-  if (/כריות|כרית|ספוג|ספונג|קרצוף/.test(name)) {
-    return "scrubbers";
-  }
-  if (/שקיות|שקית|אשפה/.test(name)) {
-    return "bags";
-  }
-  if (/כפפות|כפפה/.test(name)) {
-    return "gloves";
-  }
-  if (/מגב|מטאטא|דלי|מברשת|יעה|מקל|מתקן/.test(name)) {
-    return "tools";
-  }
+function getCategory(description: string): ProductCategoryId {
+  const category = categoryRules.find(({ pattern }) => pattern.test(description));
+  return category?.id ?? "other";
+}
 
-  return "other";
+function getCategoryGroup(category: ProductCategoryId): CategoryGroupId {
+  const group = categoryGroups.find(({ categories }) =>
+    categories.includes(category),
+  );
+  if (!group) {
+    throw new Error(`Missing category group for ${category}`);
+  }
+  return group.id;
+}
+
+function isCategoryGroup(category: CategoryId): category is CategoryGroupId {
+  return categoryGroups.some((group) => group.id === category);
 }
 
 function getOrderMultiple(capacity: string) {
@@ -234,6 +403,7 @@ function ProductCard({
 function App() {
   const [query, setQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<CategoryId>("all");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("catalog");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
@@ -254,24 +424,45 @@ function App() {
   }, [cartOpen]);
 
   const categoryCounts = useMemo(() => {
+    const categoryIds: CategoryId[] = [
+      "all",
+      ...categoryGroups.map(({ id }) => id),
+      ...categoryRules.map(({ id }) => id),
+      "other",
+    ];
     const counts = Object.fromEntries(
-      categoryOrder.map((category) => [category, 0]),
+      categoryIds.map((category) => [category, 0]),
     ) as Record<CategoryId, number>;
 
     products.forEach((product) => {
-      counts[getCategory(product.description)] += 1;
+      const category = getCategory(product.description);
+      counts[category] += 1;
+      counts[getCategoryGroup(category)] += 1;
     });
     counts.all = products.length;
     return counts;
   }, []);
 
+  const selectedGroupId =
+    selectedCategory === "all"
+      ? null
+      : isCategoryGroup(selectedCategory)
+        ? selectedCategory
+        : getCategoryGroup(selectedCategory);
+  const selectedGroup = categoryGroups.find(
+    ({ id }) => id === selectedGroupId,
+  );
+
   const filteredProducts = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase("he");
 
     return products.filter((product) => {
+      const productCategory = getCategory(product.description);
       const matchesCategory =
         selectedCategory === "all" ||
-        getCategory(product.description) === selectedCategory;
+        (isCategoryGroup(selectedCategory)
+          ? getCategoryGroup(productCategory) === selectedCategory
+          : productCategory === selectedCategory);
       const searchableText = [
         product.description,
         product.sku,
@@ -285,7 +476,35 @@ function App() {
     });
   }, [query, selectedCategory]);
 
-  const visibleProducts = filteredProducts.slice(0, visibleCount);
+  const sortedProducts = useMemo(() => {
+    if (sortOrder === "catalog") {
+      return filteredProducts;
+    }
+
+    return [...filteredProducts].sort((first, second) => {
+      if (sortOrder === "name") {
+        return first.description.localeCompare(second.description, "he");
+      }
+      if (sortOrder === "sku") {
+        return first.sku.localeCompare(second.sku, "he", { numeric: true });
+      }
+
+      const firstPrice = getNumericPrice(first.price);
+      const secondPrice = getNumericPrice(second.price);
+      if (firstPrice === null || secondPrice === null) {
+        if (firstPrice === secondPrice) {
+          return 0;
+        }
+        return firstPrice === null ? 1 : -1;
+      }
+
+      return sortOrder === "price-asc"
+        ? firstPrice - secondPrice
+        : secondPrice - firstPrice;
+    });
+  }, [filteredProducts, sortOrder]);
+
+  const visibleProducts = sortedProducts.slice(0, visibleCount);
   const cartCount = cart.reduce(
     (total, item) => total + (Number(item.quantity) || 0),
     0,
@@ -316,10 +535,13 @@ function App() {
       }),
     [cart],
   );
-  const cartTotal =
+  const cartSubtotal =
     Math.round(
       cartRows.reduce((total, row) => total + (row.lineTotal ?? 0), 0) * 100,
     ) / 100;
+  const cartVat = Math.round(cartSubtotal * VAT_RATE * 100) / 100;
+  const cartTotalWithVat =
+    Math.round((cartSubtotal + cartVat) * 100) / 100;
   const hasInvalidQuantity = cart.some(({ product, quantity }) => {
     const amount = Number(quantity);
     const multiple = getOrderMultiple(product.capacity);
@@ -337,6 +559,11 @@ function App() {
 
   function updateCategory(category: CategoryId) {
     setSelectedCategory(category);
+    setVisibleCount(PAGE_SIZE);
+  }
+
+  function updateSortOrder(value: SortOrder) {
+    setSortOrder(value);
     setVisibleCount(PAGE_SIZE);
   }
 
@@ -495,47 +722,114 @@ function App() {
         </div>
 
         <div className="catalog-controls">
-          <div className="search-wrap">
-            <SearchIcon />
-            <input
-              aria-label="חיפוש מוצרים"
-              type="search"
-              value={query}
-              onChange={(event) => updateQuery(event.target.value)}
-              placeholder="מה מחפשים? שם מוצר, מק״ט או ברקוד"
-            />
-            {query && (
-              <button
-                className="clear-search"
-                type="button"
-                onClick={() => updateQuery("")}
-                aria-label="ניקוי החיפוש"
+          <div className="catalog-control-fields">
+            <div className="search-wrap">
+              <SearchIcon />
+              <input
+                aria-label="חיפוש מוצרים"
+                type="text"
+                role="searchbox"
+                value={query}
+                onChange={(event) => updateQuery(event.target.value)}
+                placeholder="מה מחפשים? שם מוצר, מק״ט או ברקוד"
+              />
+              {query && (
+                <button
+                  className="clear-search"
+                  type="button"
+                  onClick={() => updateQuery("")}
+                  aria-label="ניקוי החיפוש"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+            <label className="sort-control">
+              <span>מיון</span>
+              <select
+                aria-label="מיון מוצרים"
+                value={sortOrder}
+                onChange={(event) => {
+                  const option = sortOptions.find(
+                    ({ value }) => value === event.target.value,
+                  );
+                  if (option) {
+                    updateSortOrder(option.value);
+                  }
+                }}
               >
-                ×
-              </button>
-            )}
+                {sortOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
           <p className="result-count" aria-live="polite">
             {filteredProducts.length} מוצרים
           </p>
         </div>
 
-        <div className="category-list" aria-label="סינון לפי קטגוריה">
-          {categoryOrder
-            .filter((category) => category === "all" || categoryCounts[category] > 0)
-            .map((category) => (
-              <button
-                className={`category-chip${selectedCategory === category ? " active" : ""}`}
-                key={category}
-                type="button"
-                aria-pressed={selectedCategory === category}
-                onClick={() => updateCategory(category)}
-              >
-                {categoryLabels[category]}
-                <span>{categoryCounts[category]}</span>
-              </button>
-            ))}
-        </div>
+        <nav className="category-navigation" aria-label="סינון לפי קטגוריה">
+          <p className="category-navigation-label">קטגוריות</p>
+          <div className="category-list category-groups">
+            <button
+              className={`category-chip${selectedCategory === "all" ? " active" : ""}`}
+              type="button"
+              aria-pressed={selectedCategory === "all"}
+              onClick={() => updateCategory("all")}
+            >
+              כל המוצרים
+              <span>{categoryCounts.all}</span>
+            </button>
+            {categoryGroups
+              .filter((group) => categoryCounts[group.id] > 0)
+              .map((group) => (
+                <button
+                  className={`category-chip${selectedGroupId === group.id ? " active" : ""}`}
+                  key={group.id}
+                  type="button"
+                  aria-pressed={selectedGroupId === group.id}
+                  onClick={() => updateCategory(group.id)}
+                >
+                  {group.label}
+                  <span>{categoryCounts[group.id]}</span>
+                </button>
+              ))}
+          </div>
+
+          {selectedGroup && (
+            <div className="subcategory-panel">
+              <p className="subcategory-heading">בתוך {selectedGroup.label}</p>
+              <div className="category-list category-subcategories">
+                <button
+                  className={`category-chip${selectedCategory === selectedGroup.id ? " active" : ""}`}
+                  type="button"
+                  aria-pressed={selectedCategory === selectedGroup.id}
+                  onClick={() => updateCategory(selectedGroup.id)}
+                >
+                  כל הקטגוריה
+                  <span>{categoryCounts[selectedGroup.id]}</span>
+                </button>
+                {selectedGroup.categories
+                  .filter((category) => categoryCounts[category] > 0)
+                  .map((category) => (
+                    <button
+                      className={`category-chip${selectedCategory === category ? " active" : ""}`}
+                      key={category}
+                      type="button"
+                      aria-pressed={selectedCategory === category}
+                      onClick={() => updateCategory(category)}
+                    >
+                      {categoryLabels[category]}
+                      <span>{categoryCounts[category]}</span>
+                    </button>
+                  ))}
+              </div>
+            </div>
+          )}
+        </nav>
 
         {visibleProducts.length > 0 ? (
           <div className="product-grid">
@@ -543,7 +837,7 @@ function App() {
               <ProductCard
                 key={`${product.sku}-${product.barcode}-${index}`}
                 product={product}
-                index={filteredProducts.indexOf(product)}
+                index={sortedProducts.indexOf(product)}
                 quantityInCart={
                   Number(
                     cart.find((item) => item.product.sku === product.sku)
@@ -572,7 +866,7 @@ function App() {
           </div>
         )}
 
-        {visibleCount < filteredProducts.length && (
+        {visibleCount < sortedProducts.length && (
           <div className="load-more-wrap">
             <button
               className="load-more"
@@ -726,9 +1020,17 @@ function App() {
                 </div>
 
                 <div className="cart-summary">
-                  <div className="cart-total-row">
-                    <span>סה״כ לפריטים עם מחיר</span>
-                    <strong>{formatCurrency(cartTotal)}</strong>
+                  <div className="cart-total-row cart-subtotal-row">
+                    <span>סה״כ לפני מע״מ</span>
+                    <strong>{formatCurrency(cartSubtotal)}</strong>
+                  </div>
+                  <div className="cart-total-row cart-vat-row">
+                    <span>מע״מ {VAT_RATE * 100}%</span>
+                    <strong>{formatCurrency(cartVat)}</strong>
+                  </div>
+                  <div className="cart-total-row cart-grand-total-row">
+                    <span>סה״כ כולל מע״מ</span>
+                    <strong>{formatCurrency(cartTotalWithVat)}</strong>
                   </div>
                   {cart.some(({ product }) => getNumericPrice(product.price) === null) && (
                     <p className="cart-note">
@@ -740,7 +1042,13 @@ function App() {
                       type="button"
                       className="export-button excel-button"
                       disabled={hasInvalidQuantity}
-                      onClick={() => downloadCartExcel(cartRows, cartTotal)}
+                      onClick={() =>
+                        downloadCartExcel(cartRows, {
+                          subtotal: cartSubtotal,
+                          vat: cartVat,
+                          totalWithVat: cartTotalWithVat,
+                        })
+                      }
                     >
                       הורדת Excel
                     </button>
