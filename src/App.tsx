@@ -30,6 +30,12 @@ type CategoryId =
   | "other";
 
 const products: Product[] = productsData;
+const productImageBySku: Record<string, string> = {
+  "0230.4": "/products/0230.4.png",
+  "0294": "/products/0294.png",
+  "0657": "/products/0657.png",
+  "0654": "/products/0654.png",
+};
 const PAGE_SIZE = 24;
 
 const categoryLabels: Record<CategoryId, string> = {
@@ -134,19 +140,31 @@ function ProductCard({
   const category = getCategory(product.description);
   const number = String(index + 1).padStart(2, "0");
   const orderMultiple = getOrderMultiple(product.capacity);
+  const image = productImageBySku[product.sku];
 
   return (
     <article className="product-card">
-      <div className={`product-visual visual-${category}`}>
-        <span className="visual-orbit orbit-one" />
-        <span className="visual-orbit orbit-two" />
-        <span className="visual-center" aria-hidden="true">
-          <svg viewBox="0 0 48 48" fill="none">
-            <path d="M24 5 28.7 18.3 42 23l-13.3 4.7L24 41l-4.7-13.3L6 23l13.3-4.7L24 5Z" />
-          </svg>
-        </span>
-        <span className="visual-index">{number}</span>
-        <span className="visual-category">{categoryLabels[category]}</span>
+      <div className={`product-visual visual-${category}${image ? " has-photo" : ""}`}>
+        {image ? (
+          <img
+            className="product-photo"
+            src={image}
+            alt={product.description}
+            loading="lazy"
+          />
+        ) : (
+          <>
+            <span className="visual-orbit orbit-one" />
+            <span className="visual-orbit orbit-two" />
+            <span className="visual-center" aria-hidden="true">
+              <svg viewBox="0 0 48 48" fill="none">
+                <path d="M24 5 28.7 18.3 42 23l-13.3 4.7L24 41l-4.7-13.3L6 23l13.3-4.7L24 5Z" />
+              </svg>
+            </span>
+            <span className="visual-index">{number}</span>
+            <span className="visual-category">{categoryLabels[category]}</span>
+          </>
+        )}
       </div>
       <div className="product-copy">
         <div className="product-topline">
@@ -465,10 +483,6 @@ function App() {
             <br />
             גדול בניקיון
           </div>
-        </div>
-        <div className="hero-footnote">
-          <span className="footnote-line" />
-          <span>נעים להכיר, אנחנו שייני</span>
         </div>
       </section>
 
