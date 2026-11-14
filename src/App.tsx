@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import productsData from "./data/products.json";
 import productImages from "./data/product-images.json";
 import {
@@ -76,10 +76,46 @@ type CategoryGroup = {
   categories: ProductCategoryId[];
 };
 
+type FeaturedBrand = {
+  id: string;
+  name: string;
+  category: ProductCategoryId;
+  sku: string;
+  tagline: string;
+  title: string;
+  description: string;
+  action: string;
+  theme: "gorilla" | "clip-n-grip";
+};
+
 const products: Product[] = productsData;
 const productImageBySku: Record<string, string> = productImages;
 const PAGE_SIZE = 24;
 const VAT_RATE = 0.18;
+const featuredBrands: FeaturedBrand[] = [
+  {
+    id: "gorilla",
+    name: "GORILLA",
+    category: "trash-bags",
+    sku: "1425",
+    tagline: "מותג שקיות האשפה",
+    title: "חוזק שאפשר לסמוך עליו",
+    description: "שקיות Gorilla למגוון צרכים בבית ובעסק.",
+    action: "לצפייה בשקיות אשפה",
+    theme: "gorilla",
+  },
+  {
+    id: "clip-n-grip",
+    name: "CLIP ’N GRIP",
+    category: "clothespins",
+    sku: "0978",
+    tagline: "מותג אטבי הכביסה",
+    title: "אחיזה חזקה, יום אחרי יום",
+    description: "הכירו את אטבי הכביסה של Clip ’N Grip.",
+    action: "לצפייה באטבי כביסה",
+    theme: "clip-n-grip",
+  },
+];
 const sortOptions: { value: SortOrder; label: string }[] = [
   { value: "catalog", label: "סדר הקטלוג" },
   { value: "name", label: "שם מוצר (א–ת)" },
@@ -186,6 +222,16 @@ const categoryGroups: CategoryGroup[] = [
   },
 ];
 
+const categoryGroupDescriptions: Record<CategoryGroupId, string> = {
+  cloths: "מטליות, סחבות ומוצרי ניגוב לבית ולעסק",
+  scrubbing: "ספוגים, כריות קרצוף ומוצרי ניקוי",
+  kitchen: "מוצרים שימושיים למטבח ולאירוח",
+  "bags-laundry": "שקיות, אטבים ואביזרים לכביסה",
+  cleaning: "כלי ניקיון, מגבים ומברשות",
+  home: "מוצרים משלימים לבית וליום־יום",
+  health: "מוצרי פארם ועזרה ראשונה",
+};
+
 const categoryRules: { id: ProductCategoryId; pattern: RegExp }[] = [
   { id: "wet-cloths", pattern: /מגבונים|מגבון|לחות לרצפה|לח לרצפה|נייר טואלט לח/ },
   { id: "microfiber", pattern: /מיקרופייבר/ },
@@ -254,6 +300,19 @@ function getCategoryGroup(category: ProductCategoryId): CategoryGroupId {
 
 function isCategoryGroup(category: CategoryId): category is CategoryGroupId {
   return categoryGroups.some((group) => group.id === category);
+}
+
+const routableCategoryIds = new Set<string>([
+  ...categoryGroups.map(({ id }) => id),
+  ...categoryRules.map(({ id }) => id),
+  "other",
+]);
+
+function getCategoryFromUrl(): CategoryId | null {
+  const category = new URLSearchParams(window.location.search).get("category");
+  return category && routableCategoryIds.has(category)
+    ? (category as CategoryId)
+    : null;
 }
 
 function getOrderMultiple(capacity: string) {
@@ -552,7 +611,9 @@ function App() {
   const [query, setQuery] = useState("");
   const [searchSuggestionsOpen, setSearchSuggestionsOpen] = useState(false);
   const [activeSearchSuggestion, setActiveSearchSuggestion] = useState(-1);
-  const [selectedCategory, setSelectedCategory] = useState<CategoryId>("all");
+  const [pageCategory, setPageCategory] = useState<CategoryId | null>(
+    getCategoryFromUrl,
+  );
   const [priceFilter, setPriceFilter] = useState<PriceFilter>("all");
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [sortOrder, setSortOrder] = useState<SortOrder>("catalog");
@@ -568,6 +629,10 @@ function App() {
   const [reducedMotionEnabled, setReducedMotionEnabled] = useState(false);
   const [expandedSpacingEnabled, setExpandedSpacingEnabled] = useState(false);
   const [readableFontEnabled, setReadableFontEnabled] = useState(false);
+  const [activeBrandIndex, setActiveBrandIndex] = useState(0);
+  const [brandCarouselHovered, setBrandCarouselHovered] = useState(false);
+  const [brandCarouselFocused, setBrandCarouselFocused] = useState(false);
+  const siteHeaderRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (!cartOpen && !selectedProduct && !accessibilityOpen) {
@@ -597,6 +662,70 @@ function App() {
       );
   }, [reducedMotionEnabled]);
 
+  useEffect(() => {
+    const header = siteHeaderRef.current;
+    if (!header) {
+      return;
+    }
+
+    const updateHeaderHeight = () => {
+      document.documentElement.style.setProperty(
+        "--site-header-height",
+        `${header.offsetHeight}px`,
+      );
+    };
+    const observer = new ResizeObserver(updateHeaderHeight);
+    observer.observe(header);
+    updateHeaderHeight();
+
+    return () => {
+      observer.disconnect();
+      document.documentElement.style.removeProperty("--site-header-height");
+    };
+  }, []);
+
+  useEffect(() => {
+    function syncCategoryFromUrl() {
+      setPageCategory(getCategoryFromUrl());
+      setQuery("");
+      setSearchSuggestionsOpen(false);
+      setActiveSearchSuggestion(-1);
+      setPriceFilter("all");
+      setSortOrder("catalog");
+      setVisibleCount(PAGE_SIZE);
+      setMobileFiltersOpen(false);
+      window.scrollTo({ top: 0, behavior: "auto" });
+    }
+
+    window.addEventListener("popstate", syncCategoryFromUrl);
+    return () => window.removeEventListener("popstate", syncCategoryFromUrl);
+  }, []);
+
+  useEffect(() => {
+    if (
+      reducedMotionEnabled ||
+      brandCarouselHovered ||
+      brandCarouselFocused ||
+      pageCategory !== null ||
+      Boolean(query.trim()) ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setActiveBrandIndex((index) => (index + 1) % featuredBrands.length);
+    }, 6000);
+
+    return () => window.clearInterval(intervalId);
+  }, [
+    brandCarouselFocused,
+    brandCarouselHovered,
+    pageCategory,
+    query,
+    reducedMotionEnabled,
+  ]);
+
   const categoryCounts = useMemo(() => {
     const categoryIds: CategoryId[] = [
       "all",
@@ -616,6 +745,37 @@ function App() {
     counts.all = products.length;
     return counts;
   }, []);
+
+  const selectedCategory = pageCategory ?? "all";
+  const showProductPage = pageCategory !== null || Boolean(query.trim());
+  const categoryLandingCards = useMemo(
+    () =>
+      categoryGroups
+        .filter((group) => categoryCounts[group.id] > 0)
+        .map((group) => {
+          const representativeProduct = products.find(
+            (product) =>
+              getCategoryGroup(getCategory(product.description)) === group.id &&
+              Boolean(productImageBySku[product.sku]),
+          );
+          return {
+            group,
+            count: categoryCounts[group.id],
+            description: categoryGroupDescriptions[group.id],
+            image: representativeProduct
+              ? productImageBySku[representativeProduct.sku]
+              : null,
+          };
+        }),
+    [categoryCounts],
+  );
+
+  const categoryPageTitle =
+    selectedCategory === "all"
+      ? "תוצאות חיפוש"
+      : isCategoryGroup(selectedCategory)
+        ? categoryGroups.find(({ id }) => id === selectedCategory)?.label ?? ""
+        : categoryLabels[selectedCategory];
 
   const selectedGroupId =
     selectedCategory === "all"
@@ -802,12 +962,31 @@ function App() {
     openProductDetails(product);
   }
 
-  function updateCategory(category: CategoryId) {
-    setSelectedCategory(category);
-    setVisibleCount(PAGE_SIZE);
-    if (category === "all" || !isCategoryGroup(category)) {
-      setMobileFiltersOpen(false);
+  function navigateToCategory(category: CategoryId | null) {
+    const url = new URL(window.location.href);
+    url.hash = "";
+    if (category) {
+      url.searchParams.set("category", category);
+    } else {
+      url.searchParams.delete("category");
     }
+
+    if (url.href !== window.location.href) {
+      window.history.pushState(null, "", url);
+    }
+    setPageCategory(category);
+    updateQuery("");
+    setPriceFilter("all");
+    setSortOrder("catalog");
+    setMobileFiltersOpen(false);
+    window.scrollTo({
+      top: 0,
+      behavior: reducedMotionEnabled ? "auto" : "smooth",
+    });
+  }
+
+  function updateCategory(category: CategoryId) {
+    navigateToCategory(category === "all" ? null : category);
   }
 
   function updatePriceFilter(value: PriceFilter) {
@@ -818,6 +997,10 @@ function App() {
   function updateSortOrder(value: SortOrder) {
     setSortOrder(value);
     setVisibleCount(PAGE_SIZE);
+  }
+
+  function showBrandCategory(category: ProductCategoryId) {
+    navigateToCategory(category);
   }
 
   function addToCart(product: Product) {
@@ -888,6 +1071,8 @@ function App() {
     setCart((items) => items.filter((item) => item.product.sku !== sku));
   }
 
+  const featuredBrand = featuredBrands[activeBrandIndex];
+
   return (
     <main
       className={[
@@ -904,90 +1089,51 @@ function App() {
         .filter(Boolean)
         .join(" ")}
     >
-      <header className="site-header">
-        <a
-          className="brand"
-          href="#top"
-          aria-label="שייני - חזרה לראש העמוד"
-          id="top"
-        >
-          <img className="brand-logo" src="/shiny-logo.png" alt="Shiny" />
-          <span className="brand-divider" />
-          <span className="brand-caption">מוצרי ניקיון</span>
-        </a>
-        <div className="header-actions">
-          <a className="header-link" href="#catalog">
-            לקטלוג <span aria-hidden="true">↓</span>
-          </a>
-          <button
-            className="cart-toggle"
-            type="button"
-            onClick={() => setCartOpen(true)}
-            aria-label={`פתיחת עגלת קניות, ${cartCount} פריטים`}
+      <header className="site-header" ref={siteHeaderRef}>
+        <div className="site-header-top-row">
+          <a
+            className="brand"
+            href={showProductPage ? "/" : "#top"}
+            aria-label="שייני - חזרה לראש העמוד"
+            id="top"
+            onClick={(event) => {
+              if (showProductPage) {
+                event.preventDefault();
+                navigateToCategory(null);
+              }
+            }}
           >
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M3 4h2l2.2 11.1a2 2 0 0 0 2 1.6h8.5a2 2 0 0 0 1.9-1.4L21 9H6" />
-              <circle cx="10" cy="20" r="1" />
-              <circle cx="18" cy="20" r="1" />
-            </svg>
-            <span>עגלה</span>
-            <span className="cart-badge">{cartCount}</span>
-          </button>
-        </div>
-      </header>
-
-      <section className="hero" aria-labelledby="hero-title">
-        <div className="hero-copy">
-          <p className="eyebrow">
-            <span className="eyebrow-dot" />
-            הבית הנקי מתחיל כאן
-          </p>
-          <h1 id="hero-title">
-            כל מה שצריך
-            <br />
-            <span>לנקות בשמחה.</span>
-          </h1>
-          <p className="hero-description">
-            מוצרים חכמים לניקיון יומיומי, לבית ולעסק.
-            <br className="desktop-break" />
-            בחרו את מה שמתאים לכם מתוך הקטלוג שלנו.
-          </p>
-          <a className="hero-action" href="#catalog">
-            לגלות את הקטלוג <span aria-hidden="true">←</span>
+            <img className="brand-logo" src="/shiny-logo.png" alt="Shiny" />
+            <span className="brand-divider" />
+            <span className="brand-caption">מוצרי ניקיון</span>
           </a>
-        </div>
-        <div className="hero-art" aria-hidden="true">
-          <div className="art-glow" />
-          <div className="art-ring ring-back" />
-          <div className="art-ring ring-front" />
-          <div className="art-spark spark-one">✳</div>
-          <div className="art-spark spark-two">✦</div>
-          <div className="art-card art-card-main">
-            <span className="art-card-small">SHINY · EVERYDAY CLEAN</span>
-            <span className="art-card-flower">✳</span>
-            <span className="art-card-name">ניקיון<br />עם חיוך</span>
-          </div>
-          <div className="art-card art-card-note">
-            <span className="note-dot" />
-            קטן בפרטים,
-            <br />
-            גדול בניקיון
-          </div>
-        </div>
-      </section>
-
-      <section className="catalog-section" id="catalog">
-        <div className="catalog-heading">
-          <div>
-            <p className="eyebrow section-eyebrow">הקטלוג שלנו</p>
-            <h2>מוצאים את הניקיון שלכם</h2>
-          </div>
-          <div className="catalog-total">
-            <span className="total-number">{products.length}</span>
-            <span>מוצרים לבחור מהם</span>
+          <div className="header-actions">
+            <button
+              className="header-link login-placeholder"
+              type="button"
+              disabled
+              title="ההתחברות תתווסף בהמשך"
+              aria-label="התחברות לאתר, בקרוב"
+            >
+              <span>התחברות</span>
+              <span className="login-coming-soon">בקרוב</span>
+            </button>
+            <button
+              className="cart-toggle"
+              type="button"
+              onClick={() => setCartOpen(true)}
+              aria-label={`פתיחת עגלת קניות, ${cartCount} פריטים`}
+            >
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M3 4h2l2.2 11.1a2 2 0 0 0 2 1.6h8.5a2 2 0 0 0 1.9-1.4L21 9H6" />
+                <circle cx="10" cy="20" r="1" />
+                <circle cx="18" cy="20" r="1" />
+              </svg>
+              <span>עגלה</span>
+              <span className="cart-badge">{cartCount}</span>
+            </button>
           </div>
         </div>
-
         <div className="catalog-sticky-bar">
           <div className="catalog-controls">
             <div className="catalog-control-fields">
@@ -1120,50 +1266,55 @@ function App() {
                   </div>
                 )}
               </div>
-              <label className="sort-control">
-                <span>מיון</span>
-                <select
-                  aria-label="מיון מוצרים"
-                  value={sortOrder}
-                  onChange={(event) => {
-                    const option = sortOptions.find(
-                      ({ value }) => value === event.target.value,
-                    );
-                    if (option) {
-                      updateSortOrder(option.value);
-                    }
-                  }}
-                >
-                  {sortOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            <button
-              className="mobile-filter-toggle"
-              type="button"
-              aria-expanded={mobileFiltersOpen}
-              aria-controls="catalog-category-filters"
-              onClick={() => setMobileFiltersOpen((open) => !open)}
-            >
-              <span>מסננים</span>
-              {activeFilterCount > 0 && (
-                <span className="filter-toggle-count">{activeFilterCount}</span>
+              {showProductPage && (
+                <label className="sort-control">
+                  <span>מיון</span>
+                  <select
+                    aria-label="מיון מוצרים"
+                    value={sortOrder}
+                    onChange={(event) => {
+                      const option = sortOptions.find(
+                        ({ value }) => value === event.target.value,
+                      );
+                      if (option) {
+                        updateSortOrder(option.value);
+                      }
+                    }}
+                  >
+                    {sortOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               )}
-              <span aria-hidden="true">{mobileFiltersOpen ? "−" : "+"}</span>
-            </button>
-            <p className="result-count" aria-live="polite">
-              {filteredProducts.length} מוצרים
-            </p>
+            </div>
+            {showProductPage && (
+              <button
+                className="mobile-filter-toggle"
+                type="button"
+                aria-expanded={mobileFiltersOpen}
+                aria-controls="catalog-extra-filters"
+                onClick={() => setMobileFiltersOpen((open) => !open)}
+              >
+                <span>מסננים</span>
+                {activeFilterCount > 0 && (
+                  <span className="filter-toggle-count">{activeFilterCount}</span>
+                )}
+                <span aria-hidden="true">{mobileFiltersOpen ? "−" : "+"}</span>
+              </button>
+            )}
           </div>
 
           <nav
-            className={`category-navigation${mobileFiltersOpen ? " mobile-open" : ""}`}
+            className={`category-navigation${showProductPage ? "" : " categories-only"}`}
             id="catalog-category-filters"
-            aria-label="סינון לפי קטגוריה ומחיר"
+            aria-label={
+              showProductPage
+                ? "סינון לפי קטגוריה ומחיר"
+                : "ניווט לקטגוריה"
+            }
           >
             <p className="category-navigation-label">קטגוריות</p>
             <div className="category-list category-groups">
@@ -1173,8 +1324,7 @@ function App() {
                 aria-pressed={selectedCategory === "all"}
                 onClick={() => updateCategory("all")}
               >
-                כל המוצרים
-                <span>{categoryCounts.all}</span>
+                כל הקטגוריות
               </button>
               {categoryGroups
                 .filter((group) => categoryCounts[group.id] > 0)
@@ -1192,112 +1342,278 @@ function App() {
                 ))}
             </div>
 
-            {selectedGroup && (
-              <div className="subcategory-panel">
-                <p className="subcategory-heading">
-                  בתוך {selectedGroup.label}
-                </p>
-                <div className="category-list category-subcategories">
-                  <button
-                    className={`category-chip${selectedCategory === selectedGroup.id ? " active" : ""}`}
-                    type="button"
-                    aria-pressed={selectedCategory === selectedGroup.id}
-                    onClick={() => updateCategory(selectedGroup.id)}
+            <div
+              className={`category-extra-filters${mobileFiltersOpen ? " mobile-open" : ""}`}
+              id="catalog-extra-filters"
+            >
+              {selectedGroup && (
+                <div className="subcategory-panel">
+                  <p className="subcategory-heading">
+                    בתוך {selectedGroup.label}
+                  </p>
+                  <div className="category-list category-subcategories">
+                    <button
+                      className={`category-chip${selectedCategory === selectedGroup.id ? " active" : ""}`}
+                      type="button"
+                      aria-pressed={selectedCategory === selectedGroup.id}
+                      onClick={() => updateCategory(selectedGroup.id)}
+                    >
+                      כל הקטגוריה
+                      <span>{categoryCounts[selectedGroup.id]}</span>
+                    </button>
+                    {selectedGroup.categories
+                      .filter((category) => categoryCounts[category] > 0)
+                      .map((category) => (
+                        <button
+                          className={`category-chip${selectedCategory === category ? " active" : ""}`}
+                          key={category}
+                          type="button"
+                          aria-pressed={selectedCategory === category}
+                          onClick={() => updateCategory(category)}
+                        >
+                          {categoryLabels[category]}
+                          <span>{categoryCounts[category]}</span>
+                        </button>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {showProductPage && (
+                <div className="price-filter-group">
+                  <p className="subcategory-heading">זמינות מחיר</p>
+                  <div
+                    className="category-list"
+                    role="group"
+                    aria-label="סינון לפי זמינות מחיר"
                   >
-                    כל הקטגוריה
-                    <span>{categoryCounts[selectedGroup.id]}</span>
-                  </button>
-                  {selectedGroup.categories
-                    .filter((category) => categoryCounts[category] > 0)
-                    .map((category) => (
+                    {priceFilterOptions.map((option) => (
                       <button
-                        className={`category-chip${selectedCategory === category ? " active" : ""}`}
-                        key={category}
+                        className={`category-chip${priceFilter === option.value ? " active" : ""}`}
+                        key={option.value}
                         type="button"
-                        aria-pressed={selectedCategory === category}
-                        onClick={() => updateCategory(category)}
+                        aria-pressed={priceFilter === option.value}
+                        onClick={() => updatePriceFilter(option.value)}
                       >
-                        {categoryLabels[category]}
-                        <span>{categoryCounts[category]}</span>
+                        {option.label}
                       </button>
                     ))}
+                  </div>
                 </div>
-              </div>
-            )}
-
-            <div className="price-filter-group">
-              <p className="subcategory-heading">זמינות מחיר</p>
-              <div
-                className="category-list"
-                role="group"
-                aria-label="סינון לפי זמינות מחיר"
-              >
-                {priceFilterOptions.map((option) => (
-                  <button
-                    className={`category-chip${priceFilter === option.value ? " active" : ""}`}
-                    key={option.value}
-                    type="button"
-                    aria-pressed={priceFilter === option.value}
-                    onClick={() => updatePriceFilter(option.value)}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
+              )}
             </div>
           </nav>
         </div>
+      </header>
 
-        {visibleProducts.length > 0 ? (
-          <div className="product-grid">
-            {visibleProducts.map((product, index) => (
-              <ProductCard
-                key={`${product.sku}-${product.barcode}-${index}`}
-                product={product}
-                index={sortedProducts.indexOf(product)}
-                quantityInCart={
-                  Number(
-                    cart.find((item) => item.product.sku === product.sku)
-                      ?.quantity,
-                  ) || 0
-                }
-                onAdd={addToCart}
-                onAdjust={adjustCartQuantity}
-                onDetailsClick={openProductDetails}
+      {!showProductPage && featuredBrand && (
+        <section className="featured-brands-section" aria-label="מותגים מובילים">
+          <div
+            className={`brand-promo-card brand-promo-card-${featuredBrand.theme}`}
+            id="featured-brand-promo"
+            role="group"
+            aria-label={featuredBrand.name}
+            aria-roledescription="קרוסלת מותגים"
+            onMouseEnter={() => setBrandCarouselHovered(true)}
+            onMouseLeave={() => setBrandCarouselHovered(false)}
+            onFocus={() => setBrandCarouselFocused(true)}
+            onBlur={(event) => {
+              const nextTarget = event.relatedTarget;
+              if (
+                !(nextTarget instanceof Node) ||
+                !event.currentTarget.contains(nextTarget)
+              ) {
+                setBrandCarouselFocused(false);
+              }
+            }}
+          >
+            <div className="brand-promo-copy" key={`${featuredBrand.id}-copy`}>
+              <p className="brand-promo-tagline">{featuredBrand.tagline}</p>
+              <p className="brand-promo-wordmark">{featuredBrand.name}</p>
+              <h2>{featuredBrand.title}</h2>
+              <p className="brand-promo-description">
+                {featuredBrand.description}
+              </p>
+              <button
+                className="brand-promo-action"
+                type="button"
+                onClick={() => showBrandCategory(featuredBrand.category)}
+              >
+                {featuredBrand.action}
+                <span aria-hidden="true">←</span>
+              </button>
+            </div>
+            <div
+              className="brand-promo-art"
+              key={`${featuredBrand.id}-art`}
+              aria-hidden="true"
+            >
+              <span className="brand-promo-watermark">
+                {featuredBrand.name}
+              </span>
+              <img
+                src={productImageBySku[featuredBrand.sku]}
+                alt=""
+                loading="lazy"
               />
-            ))}
+            </div>
+            <div className="brand-promo-controls">
+              <button
+                className="brand-promo-arrow"
+                type="button"
+                aria-label="המותג הקודם"
+                aria-controls="featured-brand-promo"
+                onClick={() =>
+                  setActiveBrandIndex(
+                    (index) =>
+                      (index - 1 + featuredBrands.length) %
+                      featuredBrands.length,
+                  )
+                }
+              >
+                <span aria-hidden="true">→</span>
+              </button>
+              <div
+                className="brand-promo-dots"
+                role="group"
+                aria-label="בחירת מותג"
+              >
+                {featuredBrands.map((brand, index) => (
+                  <button
+                    key={brand.id}
+                    className={`brand-promo-dot${index === activeBrandIndex ? " active" : ""}`}
+                    type="button"
+                    aria-label={`הצגת ${brand.name}`}
+                    aria-pressed={index === activeBrandIndex}
+                    aria-controls="featured-brand-promo"
+                    onClick={() => setActiveBrandIndex(index)}
+                  />
+                ))}
+              </div>
+              <button
+                className="brand-promo-arrow"
+                type="button"
+                aria-label="המותג הבא"
+                aria-controls="featured-brand-promo"
+                onClick={() =>
+                  setActiveBrandIndex(
+                    (index) => (index + 1) % featuredBrands.length,
+                  )
+                }
+              >
+                <span aria-hidden="true">←</span>
+              </button>
+            </div>
           </div>
-        ) : (
-          <div className="empty-state">
-            <span className="empty-icon" aria-hidden="true">✳</span>
-            <h3>לא מצאנו מוצרים מתאימים</h3>
-            <p>נסו לחפש במילים אחרות או לבחור קטגוריה אחרת.</p>
-            <button
-              type="button"
-              onClick={() => {
-                updateQuery("");
-                updateCategory("all");
-                updatePriceFilter("all");
-              }}
-            >
-              הצגת כל המוצרים
-            </button>
-          </div>
-        )}
+        </section>
+      )}
 
-        {visibleCount < sortedProducts.length && (
-          <div className="load-more-wrap">
-            <button
-              className="load-more"
-              type="button"
-              onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}
-            >
-              עוד מוצרים
-              <span aria-hidden="true">↓</span>
-            </button>
+      {!showProductPage && (
+        <section className="category-landing" id="categories">
+          <div className="category-landing-heading">
+            <div>
+              <p className="eyebrow section-eyebrow">הקטלוג שלנו</p>
+              <h1>מוצאים את מה שצריך לפי קטגוריה</h1>
+              <p>בחרו תחום כדי לראות את המוצרים הרלוונטיים.</p>
+            </div>
           </div>
-        )}
-      </section>
+          <div className="category-tile-grid">
+            {categoryLandingCards.map(
+              ({ group, count, description, image }) => (
+                <button
+                  className="category-tile"
+                  key={group.id}
+                  type="button"
+                  onClick={() => navigateToCategory(group.id)}
+                  aria-label={`פתיחת קטגוריית ${group.label}, ${count} מוצרים`}
+                >
+                  <span className="category-tile-image" aria-hidden="true">
+                    {image ? (
+                      <img src={image} alt="" loading="lazy" />
+                    ) : (
+                      <span className="category-tile-placeholder">✳</span>
+                    )}
+                  </span>
+                  <span className="category-tile-copy">
+                    <span className="category-tile-title">{group.label}</span>
+                    <span className="category-tile-description">
+                      {description}
+                    </span>
+                    <span className="category-tile-footer">
+                      <span>{count} מוצרים</span>
+                      <span>
+                        לצפייה בקטגוריה <span aria-hidden="true">←</span>
+                      </span>
+                    </span>
+                  </span>
+                </button>
+              ),
+            )}
+          </div>
+        </section>
+      )}
+
+      {showProductPage && (
+        <section className="catalog-section" id="catalog">
+          <div className="catalog-heading">
+            <div>
+              <p className="eyebrow section-eyebrow">
+                {query.trim() ? "תוצאות חיפוש" : "הקטלוג שלנו"}
+              </p>
+              <h1>{categoryPageTitle}</h1>
+            </div>
+            <div className="catalog-total">
+              <span className="total-number">{filteredProducts.length}</span>
+              <span>מוצרים</span>
+            </div>
+          </div>
+
+          {visibleProducts.length > 0 ? (
+            <div className="product-grid">
+              {visibleProducts.map((product, index) => (
+                <ProductCard
+                  key={`${product.sku}-${product.barcode}-${index}`}
+                  product={product}
+                  index={sortedProducts.indexOf(product)}
+                  quantityInCart={
+                    Number(
+                      cart.find((item) => item.product.sku === product.sku)
+                        ?.quantity,
+                    ) || 0
+                  }
+                  onAdd={addToCart}
+                  onAdjust={adjustCartQuantity}
+                  onDetailsClick={openProductDetails}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="empty-state">
+              <span className="empty-icon" aria-hidden="true">
+                ✳
+              </span>
+              <h3>לא מצאנו מוצרים מתאימים</h3>
+              <p>נסו לחפש במילים אחרות או לבחור קטגוריה אחרת.</p>
+              <button type="button" onClick={() => updateCategory("all")}>
+                חזרה לקטגוריות
+              </button>
+            </div>
+          )}
+
+          {visibleCount < sortedProducts.length && (
+            <div className="load-more-wrap">
+              <button
+                className="load-more"
+                type="button"
+                onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}
+              >
+                עוד מוצרים
+                <span aria-hidden="true">↓</span>
+              </button>
+            </div>
+          )}
+        </section>
+      )}
 
       <footer className="site-footer">
         <a className="footer-brand" href="#top" aria-label="שייני - חזרה לראש העמוד">
