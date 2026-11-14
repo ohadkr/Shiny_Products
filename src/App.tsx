@@ -560,9 +560,17 @@ function App() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [accessibilityOpen, setAccessibilityOpen] = useState(false);
+  const [highContrastEnabled, setHighContrastEnabled] = useState(false);
+  const [underlinedLinksEnabled, setUnderlinedLinksEnabled] = useState(false);
+  const [accessibilityTextScale, setAccessibilityTextScale] = useState(1);
+  const [strongFocusEnabled, setStrongFocusEnabled] = useState(false);
+  const [reducedMotionEnabled, setReducedMotionEnabled] = useState(false);
+  const [expandedSpacingEnabled, setExpandedSpacingEnabled] = useState(false);
+  const [readableFontEnabled, setReadableFontEnabled] = useState(false);
 
   useEffect(() => {
-    if (!cartOpen && !selectedProduct) {
+    if (!cartOpen && !selectedProduct && !accessibilityOpen) {
       return;
     }
 
@@ -570,12 +578,24 @@ function App() {
       if (event.key === "Escape") {
         setCartOpen(false);
         setSelectedProduct(null);
+        setAccessibilityOpen(false);
       }
     }
 
     document.addEventListener("keydown", closeOnEscape);
     return () => document.removeEventListener("keydown", closeOnEscape);
-  }, [cartOpen, selectedProduct]);
+  }, [accessibilityOpen, cartOpen, selectedProduct]);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle(
+      "accessibility-reduced-motion",
+      reducedMotionEnabled,
+    );
+    return () =>
+      document.documentElement.classList.remove(
+        "accessibility-reduced-motion",
+      );
+  }, [reducedMotionEnabled]);
 
   const categoryCounts = useMemo(() => {
     const categoryIds: CategoryId[] = [
@@ -869,7 +889,21 @@ function App() {
   }
 
   return (
-    <main>
+    <main
+      className={[
+        highContrastEnabled ? "accessibility-high-contrast" : "",
+        underlinedLinksEnabled ? "accessibility-underlined-links" : "",
+        accessibilityTextScale > 1 ? "accessibility-large-text" : "",
+        accessibilityTextScale > 1
+          ? `accessibility-text-scale-${Math.round(accessibilityTextScale * 100)}`
+          : "",
+        strongFocusEnabled ? "accessibility-strong-focus" : "",
+        expandedSpacingEnabled ? "accessibility-expanded-spacing" : "",
+        readableFontEnabled ? "accessibility-readable-font" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
       <header className="site-header">
         <a
           className="brand"
@@ -1272,6 +1306,191 @@ function App() {
         <span>עושים מקום לניקיון טוב יותר.</span>
         <a href="#top">בחזרה למעלה ↑</a>
       </footer>
+
+      {!cartOpen && !selectedProduct && (
+        <div className="accessibility-widget" dir="rtl">
+          {accessibilityOpen && (
+            <section
+              className="accessibility-panel"
+              id="accessibility-panel"
+              aria-labelledby="accessibility-title"
+            >
+              <header className="accessibility-panel-header">
+                <h2 id="accessibility-title">אפשרויות נגישות</h2>
+                <button
+                  className="accessibility-panel-close"
+                  type="button"
+                  aria-label="סגירת תפריט הנגישות"
+                  onClick={() => setAccessibilityOpen(false)}
+                >
+                  ×
+                </button>
+              </header>
+              <button
+                className="accessibility-option"
+                type="button"
+                aria-pressed={highContrastEnabled}
+                onClick={() => setHighContrastEnabled((enabled) => !enabled)}
+              >
+                <span>ניגודיות גבוהה</span>
+                <span className="accessibility-option-state">
+                  {highContrastEnabled ? "פעיל" : "כבוי"}
+                </span>
+              </button>
+              <button
+                className="accessibility-option"
+                type="button"
+                aria-pressed={underlinedLinksEnabled}
+                onClick={() =>
+                  setUnderlinedLinksEnabled((enabled) => !enabled)
+                }
+              >
+                <span>הדגשת קישורים בקו תחתון</span>
+                <span className="accessibility-option-state">
+                  {underlinedLinksEnabled ? "פעיל" : "כבוי"}
+                </span>
+              </button>
+              <div className="accessibility-text-controls">
+                <span>גודל טקסט</span>
+                <div>
+                  <button
+                    type="button"
+                    aria-label="הקטנת טקסט"
+                    title="הקטנת טקסט"
+                    disabled={accessibilityTextScale <= 1}
+                    onClick={() =>
+                      setAccessibilityTextScale((scale) =>
+                        Math.max(1, Math.round((scale - 0.1) * 10) / 10),
+                      )
+                    }
+                  >
+                    A−
+                  </button>
+                  <span aria-live="polite">
+                    {Math.round(accessibilityTextScale * 100)}%
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="הגדלת טקסט"
+                    title="הגדלת טקסט"
+                    disabled={accessibilityTextScale >= 1.2}
+                    onClick={() =>
+                      setAccessibilityTextScale((scale) =>
+                        Math.min(1.2, Math.round((scale + 0.1) * 10) / 10),
+                      )
+                    }
+                  >
+                    A+
+                  </button>
+                </div>
+              </div>
+              <button
+                className="accessibility-option"
+                type="button"
+                aria-pressed={strongFocusEnabled}
+                onClick={() => setStrongFocusEnabled((enabled) => !enabled)}
+              >
+                <span>הדגשת מיקוד מקלדת</span>
+                <span className="accessibility-option-state">
+                  {strongFocusEnabled ? "פעיל" : "כבוי"}
+                </span>
+              </button>
+              <button
+                className="accessibility-option"
+                type="button"
+                aria-pressed={reducedMotionEnabled}
+                onClick={() => setReducedMotionEnabled((enabled) => !enabled)}
+              >
+                <span>הפחתת אנימציות</span>
+                <span className="accessibility-option-state">
+                  {reducedMotionEnabled ? "פעיל" : "כבוי"}
+                </span>
+              </button>
+              <button
+                className="accessibility-option"
+                type="button"
+                aria-pressed={expandedSpacingEnabled}
+                onClick={() => setExpandedSpacingEnabled((enabled) => !enabled)}
+              >
+                <span>ריווח מוגדל בטקסט</span>
+                <span className="accessibility-option-state">
+                  {expandedSpacingEnabled ? "פעיל" : "כבוי"}
+                </span>
+              </button>
+              <button
+                className="accessibility-option"
+                type="button"
+                aria-pressed={readableFontEnabled}
+                onClick={() => setReadableFontEnabled((enabled) => !enabled)}
+              >
+                <span>גופן קריא</span>
+                <span className="accessibility-option-state">
+                  {readableFontEnabled ? "פעיל" : "כבוי"}
+                </span>
+              </button>
+              <a
+                className="accessibility-skip-link"
+                href="#catalog"
+                onClick={() => setAccessibilityOpen(false)}
+              >
+                מעבר ישיר לקטלוג
+              </a>
+              <button
+                className="accessibility-reset"
+                type="button"
+                disabled={
+                  !highContrastEnabled &&
+                  !underlinedLinksEnabled &&
+                  accessibilityTextScale === 1 &&
+                  !strongFocusEnabled &&
+                  !reducedMotionEnabled &&
+                  !expandedSpacingEnabled &&
+                  !readableFontEnabled
+                }
+                onClick={() => {
+                  setHighContrastEnabled(false);
+                  setUnderlinedLinksEnabled(false);
+                  setAccessibilityTextScale(1);
+                  setStrongFocusEnabled(false);
+                  setReducedMotionEnabled(false);
+                  setExpandedSpacingEnabled(false);
+                  setReadableFontEnabled(false);
+                }}
+              >
+                איפוס אפשרויות
+              </button>
+            </section>
+          )}
+          <button
+            className="accessibility-toggle"
+            type="button"
+            aria-label={
+              accessibilityOpen ? "סגירת תפריט נגישות" : "פתיחת תפריט נגישות"
+            }
+            aria-expanded={accessibilityOpen}
+            aria-controls={
+              accessibilityOpen ? "accessibility-panel" : undefined
+            }
+            onClick={() => setAccessibilityOpen((open) => !open)}
+          >
+            <svg
+              viewBox="0 0 32 32"
+              fill="none"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <circle cx="16" cy="5.6" r="2.7" fill="currentColor" />
+              <path
+                d="M6 11.2h20M16 9v8m0 0-6.2 9M16 17l6.2 9M9.8 11.2l2.4 6.1m10-6.1-2.4 6.1"
+                stroke="currentColor"
+                strokeWidth="2.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        </div>
+      )}
 
       {selectedProduct && (
         <div
