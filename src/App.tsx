@@ -21,6 +21,7 @@ type CartItem = {
 };
 
 type SortOrder = "catalog" | "name" | "price-asc" | "price-desc" | "sku";
+type PriceFilter = "all" | "priced" | "unpriced";
 
 type CategoryGroupId =
   | "cloths"
@@ -85,6 +86,11 @@ const sortOptions: { value: SortOrder; label: string }[] = [
   { value: "price-asc", label: "מחיר: מהנמוך לגבוה" },
   { value: "price-desc", label: "מחיר: מהגבוה לנמוך" },
   { value: "sku", label: "מק״ט" },
+];
+const priceFilterOptions: { value: PriceFilter; label: string }[] = [
+  { value: "all", label: "כל המחירים" },
+  { value: "priced", label: "מחיר זמין" },
+  { value: "unpriced", label: "מחיר חסר" },
 ];
 
 const categoryLabels: Record<ProductCategoryId, string> = {
@@ -295,28 +301,44 @@ function ProductCard({
   quantityInCart,
   onAdd,
   onAdjust,
+  onImageClick,
 }: {
   product: Product;
   index: number;
   quantityInCart: number;
   onAdd: (product: Product) => void;
   onAdjust: (sku: string, direction: -1 | 1) => void;
+  onImageClick: (product: Product) => void;
 }) {
   const category = getCategory(product.description);
   const number = String(index + 1).padStart(2, "0");
   const orderMultiple = getOrderMultiple(product.capacity);
   const image = productImageBySku[product.sku];
+  const unitPrice = getNumericPrice(product.price);
 
   return (
     <article className="product-card">
       <div className={`product-visual visual-${category}${image ? " has-photo" : ""}`}>
         {image ? (
-          <img
-            className="product-photo"
-            src={image}
-            alt={product.description}
-            loading="lazy"
-          />
+          <button
+            className="product-photo-button"
+            type="button"
+            aria-label={`הגדלת תמונה של ${product.description}`}
+            onClick={() => onImageClick(product)}
+          >
+            <img
+              className="product-photo"
+              src={image}
+              alt=""
+              loading="lazy"
+            />
+            <span className="photo-zoom-hint" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <circle cx="10.8" cy="10.8" r="6.8" />
+                <path d="m16 16 4.2 4.2M10.8 7.5v6.6M7.5 10.8h6.6" />
+              </svg>
+            </span>
+          </button>
         ) : (
           <>
             <span className="visual-orbit orbit-one" />
@@ -334,25 +356,26 @@ function ProductCard({
       <div className="product-copy">
         <div className="product-topline">
           <span className="product-sku">מק״ט {product.sku || "—"}</span>
-          {product.price && (
+          {unitPrice !== null ? (
             <span className="product-price">
-              <span className="meta-label">מחיר</span>
-              {formatCurrency(Number(product.price))}
+              <span className="meta-label">מחיר ליחידה:</span>{" "}
+              {formatCurrency(unitPrice)}
+            </span>
+          ) : (
+            <span className="product-price product-price-unavailable">
+              מחיר לא זמין
             </span>
           )}
         </div>
         <h2>{product.description || "מוצר שייני"}</h2>
         <div className="product-meta">
-          {product.capacity && (
-            <span>
-              <span className="meta-label">אריזה</span>
-              {product.capacity}
-            </span>
-          )}
+          <span>
+            <span className="meta-label">אריזה:</span>{" "}
+            {product.capacity || "לא צוינה"}
+          </span>
           {product.barcode && (
             <span className="barcode">
-              <span className="meta-label">ברקוד</span>
-              {product.barcode}
+              <span className="meta-label">ברקוד:</span> {product.barcode}
             </span>
           )}
         </div>
@@ -403,25 +426,30 @@ function ProductCard({
 function App() {
   const [query, setQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<CategoryId>("all");
+  const [priceFilter, setPriceFilter] = useState<PriceFilter>("all");
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [sortOrder, setSortOrder] = useState<SortOrder>("catalog");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
+  const [selectedImageProduct, setSelectedImageProduct] =
+    useState<Product | null>(null);
 
   useEffect(() => {
-    if (!cartOpen) {
+    if (!cartOpen && !selectedImageProduct) {
       return;
     }
 
     function closeOnEscape(event: KeyboardEvent) {
       if (event.key === "Escape") {
         setCartOpen(false);
+        setSelectedImageProduct(null);
       }
     }
 
     document.addEventListener("keydown", closeOnEscape);
     return () => document.removeEventListener("keydown", closeOnEscape);
-  }, [cartOpen]);
+  }, [cartOpen, selectedImageProduct]);
 
   const categoryCounts = useMemo(() => {
     const categoryIds: CategoryId[] = [
@@ -471,10 +499,20 @@ function App() {
       ]
         .join(" ")
         .toLocaleLowerCase("he");
+      const productPrice = getNumericPrice(product.price);
+      const matchesPrice =
+        priceFilter === "all" ||
+        (priceFilter === "priced"
+          ? productPrice !== null
+          : productPrice === null);
 
-      return matchesCategory && searchableText.includes(normalizedQuery);
+      return (
+        matchesCategory &&
+        matchesPrice &&
+        searchableText.includes(normalizedQuery)
+      );
     });
-  }, [query, selectedCategory]);
+  }, [priceFilter, query, selectedCategory]);
 
   const sortedProducts = useMemo(() => {
     if (sortOrder === "catalog") {
@@ -505,6 +543,8 @@ function App() {
   }, [filteredProducts, sortOrder]);
 
   const visibleProducts = sortedProducts.slice(0, visibleCount);
+  const activeFilterCount =
+    Number(selectedCategory !== "all") + Number(priceFilter !== "all");
   const cartCount = cart.reduce(
     (total, item) => total + (Number(item.quantity) || 0),
     0,
@@ -559,6 +599,14 @@ function App() {
 
   function updateCategory(category: CategoryId) {
     setSelectedCategory(category);
+    setVisibleCount(PAGE_SIZE);
+    if (category === "all" || !isCategoryGroup(category)) {
+      setMobileFiltersOpen(false);
+    }
+  }
+
+  function updatePriceFilter(value: PriceFilter) {
+    setPriceFilter(value);
     setVisibleCount(PAGE_SIZE);
   }
 
@@ -721,115 +769,157 @@ function App() {
           </div>
         </div>
 
-        <div className="catalog-controls">
-          <div className="catalog-control-fields">
-            <div className="search-wrap">
-              <SearchIcon />
-              <input
-                aria-label="חיפוש מוצרים"
-                type="text"
-                role="searchbox"
-                value={query}
-                onChange={(event) => updateQuery(event.target.value)}
-                placeholder="מה מחפשים? שם מוצר, מק״ט או ברקוד"
-              />
-              {query && (
-                <button
-                  className="clear-search"
-                  type="button"
-                  onClick={() => updateQuery("")}
-                  aria-label="ניקוי החיפוש"
+        <div className="catalog-sticky-bar">
+          <div className="catalog-controls">
+            <div className="catalog-control-fields">
+              <div className="search-wrap">
+                <SearchIcon />
+                <input
+                  aria-label="חיפוש מוצרים"
+                  type="text"
+                  role="searchbox"
+                  value={query}
+                  onChange={(event) => updateQuery(event.target.value)}
+                  placeholder="שם מוצר, מותג, ניחוח, גודל, מק״ט או ברקוד"
+                />
+                {query && (
+                  <button
+                    className="clear-search"
+                    type="button"
+                    onClick={() => updateQuery("")}
+                    aria-label="ניקוי החיפוש"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+              <label className="sort-control">
+                <span>מיון</span>
+                <select
+                  aria-label="מיון מוצרים"
+                  value={sortOrder}
+                  onChange={(event) => {
+                    const option = sortOptions.find(
+                      ({ value }) => value === event.target.value,
+                    );
+                    if (option) {
+                      updateSortOrder(option.value);
+                    }
+                  }}
                 >
-                  ×
-                </button>
-              )}
-            </div>
-            <label className="sort-control">
-              <span>מיון</span>
-              <select
-                aria-label="מיון מוצרים"
-                value={sortOrder}
-                onChange={(event) => {
-                  const option = sortOptions.find(
-                    ({ value }) => value === event.target.value,
-                  );
-                  if (option) {
-                    updateSortOrder(option.value);
-                  }
-                }}
-              >
-                {sortOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <p className="result-count" aria-live="polite">
-            {filteredProducts.length} מוצרים
-          </p>
-        </div>
-
-        <nav className="category-navigation" aria-label="סינון לפי קטגוריה">
-          <p className="category-navigation-label">קטגוריות</p>
-          <div className="category-list category-groups">
-            <button
-              className={`category-chip${selectedCategory === "all" ? " active" : ""}`}
-              type="button"
-              aria-pressed={selectedCategory === "all"}
-              onClick={() => updateCategory("all")}
-            >
-              כל המוצרים
-              <span>{categoryCounts.all}</span>
-            </button>
-            {categoryGroups
-              .filter((group) => categoryCounts[group.id] > 0)
-              .map((group) => (
-                <button
-                  className={`category-chip${selectedGroupId === group.id ? " active" : ""}`}
-                  key={group.id}
-                  type="button"
-                  aria-pressed={selectedGroupId === group.id}
-                  onClick={() => updateCategory(group.id)}
-                >
-                  {group.label}
-                  <span>{categoryCounts[group.id]}</span>
-                </button>
-              ))}
-          </div>
-
-          {selectedGroup && (
-            <div className="subcategory-panel">
-              <p className="subcategory-heading">בתוך {selectedGroup.label}</p>
-              <div className="category-list category-subcategories">
-                <button
-                  className={`category-chip${selectedCategory === selectedGroup.id ? " active" : ""}`}
-                  type="button"
-                  aria-pressed={selectedCategory === selectedGroup.id}
-                  onClick={() => updateCategory(selectedGroup.id)}
-                >
-                  כל הקטגוריה
-                  <span>{categoryCounts[selectedGroup.id]}</span>
-                </button>
-                {selectedGroup.categories
-                  .filter((category) => categoryCounts[category] > 0)
-                  .map((category) => (
-                    <button
-                      className={`category-chip${selectedCategory === category ? " active" : ""}`}
-                      key={category}
-                      type="button"
-                      aria-pressed={selectedCategory === category}
-                      onClick={() => updateCategory(category)}
-                    >
-                      {categoryLabels[category]}
-                      <span>{categoryCounts[category]}</span>
-                    </button>
+                  {sortOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
                   ))}
+                </select>
+              </label>
+            </div>
+            <button
+              className="mobile-filter-toggle"
+              type="button"
+              aria-expanded={mobileFiltersOpen}
+              aria-controls="catalog-category-filters"
+              onClick={() => setMobileFiltersOpen((open) => !open)}
+            >
+              <span>מסננים</span>
+              {activeFilterCount > 0 && (
+                <span className="filter-toggle-count">{activeFilterCount}</span>
+              )}
+              <span aria-hidden="true">{mobileFiltersOpen ? "−" : "+"}</span>
+            </button>
+            <p className="result-count" aria-live="polite">
+              {filteredProducts.length} מוצרים
+            </p>
+          </div>
+
+          <nav
+            className={`category-navigation${mobileFiltersOpen ? " mobile-open" : ""}`}
+            id="catalog-category-filters"
+            aria-label="סינון לפי קטגוריה ומחיר"
+          >
+            <p className="category-navigation-label">קטגוריות</p>
+            <div className="category-list category-groups">
+              <button
+                className={`category-chip${selectedCategory === "all" ? " active" : ""}`}
+                type="button"
+                aria-pressed={selectedCategory === "all"}
+                onClick={() => updateCategory("all")}
+              >
+                כל המוצרים
+                <span>{categoryCounts.all}</span>
+              </button>
+              {categoryGroups
+                .filter((group) => categoryCounts[group.id] > 0)
+                .map((group) => (
+                  <button
+                    className={`category-chip${selectedGroupId === group.id ? " active" : ""}`}
+                    key={group.id}
+                    type="button"
+                    aria-pressed={selectedGroupId === group.id}
+                    onClick={() => updateCategory(group.id)}
+                  >
+                    {group.label}
+                    <span>{categoryCounts[group.id]}</span>
+                  </button>
+                ))}
+            </div>
+
+            {selectedGroup && (
+              <div className="subcategory-panel">
+                <p className="subcategory-heading">
+                  בתוך {selectedGroup.label}
+                </p>
+                <div className="category-list category-subcategories">
+                  <button
+                    className={`category-chip${selectedCategory === selectedGroup.id ? " active" : ""}`}
+                    type="button"
+                    aria-pressed={selectedCategory === selectedGroup.id}
+                    onClick={() => updateCategory(selectedGroup.id)}
+                  >
+                    כל הקטגוריה
+                    <span>{categoryCounts[selectedGroup.id]}</span>
+                  </button>
+                  {selectedGroup.categories
+                    .filter((category) => categoryCounts[category] > 0)
+                    .map((category) => (
+                      <button
+                        className={`category-chip${selectedCategory === category ? " active" : ""}`}
+                        key={category}
+                        type="button"
+                        aria-pressed={selectedCategory === category}
+                        onClick={() => updateCategory(category)}
+                      >
+                        {categoryLabels[category]}
+                        <span>{categoryCounts[category]}</span>
+                      </button>
+                    ))}
+                </div>
+              </div>
+            )}
+
+            <div className="price-filter-group">
+              <p className="subcategory-heading">זמינות מחיר</p>
+              <div
+                className="category-list"
+                role="group"
+                aria-label="סינון לפי זמינות מחיר"
+              >
+                {priceFilterOptions.map((option) => (
+                  <button
+                    className={`category-chip${priceFilter === option.value ? " active" : ""}`}
+                    key={option.value}
+                    type="button"
+                    aria-pressed={priceFilter === option.value}
+                    onClick={() => updatePriceFilter(option.value)}
+                  >
+                    {option.label}
+                  </button>
+                ))}
               </div>
             </div>
-          )}
-        </nav>
+          </nav>
+        </div>
 
         {visibleProducts.length > 0 ? (
           <div className="product-grid">
@@ -846,6 +936,9 @@ function App() {
                 }
                 onAdd={addToCart}
                 onAdjust={adjustCartQuantity}
+                onImageClick={(imageProduct) =>
+                  setSelectedImageProduct(imageProduct)
+                }
               />
             ))}
           </div>
@@ -859,6 +952,7 @@ function App() {
               onClick={() => {
                 updateQuery("");
                 updateCategory("all");
+                updatePriceFilter("all");
               }}
             >
               הצגת כל המוצרים
@@ -887,6 +981,49 @@ function App() {
         <span>עושים מקום לניקיון טוב יותר.</span>
         <a href="#top">בחזרה למעלה ↑</a>
       </footer>
+
+      {selectedImageProduct && (
+        <div
+          className="image-lightbox"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setSelectedImageProduct(null);
+            }
+          }}
+        >
+          <section
+            className="image-lightbox-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="product-image-title"
+          >
+            <header className="image-lightbox-header">
+              <div>
+                <p className="eyebrow section-eyebrow">
+                  מק״ט {selectedImageProduct.sku}
+                </p>
+                <h2 id="product-image-title">
+                  {selectedImageProduct.description}
+                </h2>
+              </div>
+              <button
+                className="cart-close"
+                type="button"
+                autoFocus
+                aria-label="סגירת תמונת המוצר"
+                onClick={() => setSelectedImageProduct(null)}
+              >
+                ×
+              </button>
+            </header>
+            <img
+              className="lightbox-product-image"
+              src={productImageBySku[selectedImageProduct.sku]}
+              alt={selectedImageProduct.description}
+            />
+          </section>
+        </div>
+      )}
 
       {cartOpen && (
         <div
