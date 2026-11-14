@@ -281,6 +281,123 @@ function formatCurrency(amount: number) {
   }).format(amount);
 }
 
+const variantAttributeTerms = [
+  "כחול שמיים",
+  "כחול כהה",
+  "כהה",
+  "בהיר",
+  "ורוד בייבי",
+  "מגוון צבעים",
+  "פריחת הדובדבן",
+  "בית מלון יוקרתי",
+  "מרכך כביסה",
+  "מלון יוקרה",
+  "פצ'ולי",
+  "פצולי",
+  "לבנדר",
+  "וניל",
+  "לימון",
+  "פרחים",
+  "מרענן",
+  "שחורות",
+  "שחורים",
+  "שחורה",
+  "שחור",
+  "לבנות",
+  "לבנים",
+  "לבנה",
+  "לבן",
+  "כחולות",
+  "כחולים",
+  "כחולה",
+  "כחול",
+  "צהובות",
+  "צהובים",
+  "צהובה",
+  "צהוב",
+  "אדומות",
+  "אדומים",
+  "אדומה",
+  "אדום",
+  "ירוקות",
+  "ירוקים",
+  "ירוקה",
+  "ירוק",
+  "ורודות",
+  "ורודים",
+  "ורודה",
+  "ורוד",
+  "סגולות",
+  "סגולים",
+  "סגולה",
+  "סגול",
+  "אפורות",
+  "אפורים",
+  "אפורה",
+  "אפור",
+  "כתומות",
+  "כתומים",
+  "כתומה",
+  "כתום",
+  "חומות",
+  "חומים",
+  "חומה",
+  "חום",
+  "זהובה",
+  "זהב",
+  "כסופה",
+  "כסוף",
+  "כסף",
+  "נחושת",
+  "צבעוניות",
+  "צבעוניים",
+  "צבעונית",
+  "צבעוני",
+];
+
+function getVariantGroupKey(description: string) {
+  let key = description
+    .toLocaleLowerCase("he")
+    .replace(/\d+\s*(?:[x×]\s*\d+)+/giu, " ")
+    .replace(
+      /(?:כ\s*-\s*)?\d+(?:[.,]\d+)?\s*(?:מטר|מ['״]|ס['״]?מ|מ['״]?ל|מל|ליטר|גרם|קילו|ק['״]?ג|יחידות|יח['״]?)/giu,
+      " ",
+    )
+    .replace(/(?:מידה\s*)?\b(?:XXL|XL|XS|S|M|L)\b/giu, " ")
+    .replace(/(?:בניחוח|ניחוח)\s*/giu, " ")
+    .replace(/בלבד/giu, " ");
+
+  for (const term of variantAttributeTerms) {
+    key = key.replace(new RegExp(term, "giu"), " ");
+  }
+
+  key = key.replace(/[^A-Za-z0-9\u0590-\u05FF]+/g, " ").replace(/\s+/g, " ").trim();
+  return key.split(" ").filter(Boolean).length >= 2 ? key : null;
+}
+
+const productsByVariantKey = new Map<string, Product[]>();
+for (const product of products) {
+  const key = getVariantGroupKey(product.description);
+  if (!key) {
+    continue;
+  }
+
+  const variants = productsByVariantKey.get(key) ?? [];
+  variants.push(product);
+  productsByVariantKey.set(key, variants);
+}
+
+const variantsBySku = new Map<string, Product[]>();
+for (const variants of productsByVariantKey.values()) {
+  if (variants.length < 2) {
+    continue;
+  }
+
+  for (const product of variants) {
+    variantsBySku.set(product.sku, variants);
+  }
+}
+
 function SearchIcon() {
   return (
     <svg
@@ -301,14 +418,14 @@ function ProductCard({
   quantityInCart,
   onAdd,
   onAdjust,
-  onImageClick,
+  onDetailsClick,
 }: {
   product: Product;
   index: number;
   quantityInCart: number;
   onAdd: (product: Product) => void;
   onAdjust: (sku: string, direction: -1 | 1) => void;
-  onImageClick: (product: Product) => void;
+  onDetailsClick: (product: Product) => void;
 }) {
   const category = getCategory(product.description);
   const number = String(index + 1).padStart(2, "0");
@@ -323,8 +440,8 @@ function ProductCard({
           <button
             className="product-photo-button"
             type="button"
-            aria-label={`הגדלת תמונה של ${product.description}`}
-            onClick={() => onImageClick(product)}
+            aria-label={`פתיחת פרטי מוצר ${product.description}`}
+            onClick={() => onDetailsClick(product)}
           >
             <img
               className="product-photo"
@@ -367,7 +484,15 @@ function ProductCard({
             </span>
           )}
         </div>
-        <h2>{product.description || "מוצר שייני"}</h2>
+        <h2>
+          <button
+            className="product-title-button"
+            type="button"
+            onClick={() => onDetailsClick(product)}
+          >
+            {product.description || "מוצר שייני"}
+          </button>
+        </h2>
         <div className="product-meta">
           <span>
             <span className="meta-label">אריזה:</span>{" "}
@@ -425,6 +550,8 @@ function ProductCard({
 
 function App() {
   const [query, setQuery] = useState("");
+  const [searchSuggestionsOpen, setSearchSuggestionsOpen] = useState(false);
+  const [activeSearchSuggestion, setActiveSearchSuggestion] = useState(-1);
   const [selectedCategory, setSelectedCategory] = useState<CategoryId>("all");
   const [priceFilter, setPriceFilter] = useState<PriceFilter>("all");
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
@@ -432,24 +559,23 @@ function App() {
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
-  const [selectedImageProduct, setSelectedImageProduct] =
-    useState<Product | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
   useEffect(() => {
-    if (!cartOpen && !selectedImageProduct) {
+    if (!cartOpen && !selectedProduct) {
       return;
     }
 
     function closeOnEscape(event: KeyboardEvent) {
       if (event.key === "Escape") {
         setCartOpen(false);
-        setSelectedImageProduct(null);
+        setSelectedProduct(null);
       }
     }
 
     document.addEventListener("keydown", closeOnEscape);
     return () => document.removeEventListener("keydown", closeOnEscape);
-  }, [cartOpen, selectedImageProduct]);
+  }, [cartOpen, selectedProduct]);
 
   const categoryCounts = useMemo(() => {
     const categoryIds: CategoryId[] = [
@@ -542,7 +668,53 @@ function App() {
     });
   }, [filteredProducts, sortOrder]);
 
+  const searchSuggestions = useMemo(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase("he");
+    if (!normalizedQuery) {
+      return [];
+    }
+
+    return sortedProducts
+      .map((product, index) => {
+        const sku = product.sku.toLocaleLowerCase("he");
+        const description = product.description.toLocaleLowerCase("he");
+        const barcode = product.barcode.toLocaleLowerCase("he");
+        const capacity = product.capacity.toLocaleLowerCase("he");
+        const score =
+          sku === normalizedQuery
+            ? 0
+            : sku.startsWith(normalizedQuery)
+              ? 1
+              : description.startsWith(normalizedQuery)
+                ? 2
+                : description.includes(normalizedQuery)
+                  ? 3
+                  : barcode.includes(normalizedQuery) ||
+                      capacity.includes(normalizedQuery)
+                    ? 4
+                    : 5;
+
+        return { product, index, score };
+      })
+      .sort((first, second) => first.score - second.score || first.index - second.index)
+      .slice(0, 6)
+      .map(({ product }) => product);
+  }, [query, sortedProducts]);
+
   const visibleProducts = sortedProducts.slice(0, visibleCount);
+  const selectedProductVariants = selectedProduct
+    ? variantsBySku.get(selectedProduct.sku) ?? []
+    : [];
+  const selectedProductQuantity = selectedProduct
+    ? Number(
+        cart.find((item) => item.product.sku === selectedProduct.sku)?.quantity,
+      ) || 0
+    : 0;
+  const selectedProductPrice = selectedProduct
+    ? getNumericPrice(selectedProduct.price)
+    : null;
+  const showSearchSuggestions =
+    searchSuggestionsOpen && Boolean(query.trim());
   const activeFilterCount =
     Number(selectedCategory !== "all") + Number(priceFilter !== "all");
   const cartCount = cart.reduce(
@@ -595,6 +767,19 @@ function App() {
   function updateQuery(value: string) {
     setQuery(value);
     setVisibleCount(PAGE_SIZE);
+    setSearchSuggestionsOpen(Boolean(value.trim()));
+    setActiveSearchSuggestion(-1);
+  }
+
+  function openProductDetails(product: Product) {
+    setSelectedProduct(product);
+    setSearchSuggestionsOpen(false);
+    setActiveSearchSuggestion(-1);
+  }
+
+  function selectSearchSuggestion(product: Product) {
+    updateQuery(product.sku || product.description);
+    openProductDetails(product);
   }
 
   function updateCategory(category: CategoryId) {
@@ -775,11 +960,76 @@ function App() {
               <div className="search-wrap">
                 <SearchIcon />
                 <input
+                  id="catalog-search"
                   aria-label="חיפוש מוצרים"
                   type="text"
-                  role="searchbox"
+                  role="combobox"
+                  aria-autocomplete="list"
+                  aria-expanded={showSearchSuggestions}
+                  aria-controls={
+                    showSearchSuggestions
+                      ? "catalog-search-suggestions"
+                      : undefined
+                  }
+                  aria-haspopup="listbox"
+                  aria-activedescendant={
+                    activeSearchSuggestion >= 0 &&
+                    activeSearchSuggestion < searchSuggestions.length
+                      ? `search-suggestion-${activeSearchSuggestion}`
+                      : undefined
+                  }
                   value={query}
                   onChange={(event) => updateQuery(event.target.value)}
+                  onFocus={() => {
+                    if (query.trim()) {
+                      setSearchSuggestionsOpen(true);
+                    }
+                  }}
+                  onBlur={(event) => {
+                    const nextTarget = event.relatedTarget;
+                    if (
+                      !(nextTarget instanceof Node) ||
+                      !event.currentTarget.contains(nextTarget)
+                    ) {
+                      setSearchSuggestionsOpen(false);
+                      setActiveSearchSuggestion(-1);
+                    }
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape" && showSearchSuggestions) {
+                      event.preventDefault();
+                      setSearchSuggestionsOpen(false);
+                      setActiveSearchSuggestion(-1);
+                    } else if (searchSuggestions.length > 0) {
+                      if (event.key === "ArrowDown") {
+                        event.preventDefault();
+                        setSearchSuggestionsOpen(true);
+                        setActiveSearchSuggestion((active) =>
+                          active >= searchSuggestions.length - 1
+                            ? 0
+                            : active + 1,
+                        );
+                      } else if (event.key === "ArrowUp") {
+                        event.preventDefault();
+                        setSearchSuggestionsOpen(true);
+                        setActiveSearchSuggestion((active) =>
+                          active <= 0
+                            ? searchSuggestions.length - 1
+                            : active - 1,
+                        );
+                      } else if (
+                        event.key === "Enter" &&
+                        activeSearchSuggestion >= 0
+                      ) {
+                        event.preventDefault();
+                        const suggestion =
+                          searchSuggestions[activeSearchSuggestion];
+                        if (suggestion) {
+                          selectSearchSuggestion(suggestion);
+                        }
+                      }
+                    }
+                  }}
                   placeholder="שם מוצר, מותג, ניחוח, גודל, מק״ט או ברקוד"
                 />
                 {query && (
@@ -791,6 +1041,49 @@ function App() {
                   >
                     ×
                   </button>
+                )}
+                {showSearchSuggestions && (
+                  <div
+                    className="search-suggestions"
+                    id="catalog-search-suggestions"
+                    role="listbox"
+                    aria-label="הצעות למוצרים"
+                  >
+                    {searchSuggestions.length > 0 ? (
+                      searchSuggestions.map((product, index) => {
+                        const price = getNumericPrice(product.price);
+                        return (
+                          <button
+                            className={`search-suggestion${activeSearchSuggestion === index ? " active" : ""}`}
+                            id={`search-suggestion-${index}`}
+                            key={product.sku}
+                            type="button"
+                            role="option"
+                            aria-selected={activeSearchSuggestion === index}
+                            onMouseDown={(event) => event.preventDefault()}
+                            onMouseEnter={() =>
+                              setActiveSearchSuggestion(index)
+                            }
+                            onClick={() => selectSearchSuggestion(product)}
+                          >
+                            <span className="search-suggestion-copy">
+                              <strong>{product.description}</strong>
+                              <small>מק״ט {product.sku}</small>
+                            </span>
+                            <span className="search-suggestion-price">
+                              {price === null
+                                ? "מחיר לא זמין"
+                                : formatCurrency(price)}
+                            </span>
+                          </button>
+                        );
+                      })
+                    ) : (
+                      <p className="search-suggestions-empty">
+                        לא נמצאו הצעות מתאימות
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
               <label className="sort-control">
@@ -936,9 +1229,7 @@ function App() {
                 }
                 onAdd={addToCart}
                 onAdjust={adjustCartQuantity}
-                onImageClick={(imageProduct) =>
-                  setSelectedImageProduct(imageProduct)
-                }
+                onDetailsClick={openProductDetails}
               />
             ))}
           </div>
@@ -982,45 +1273,119 @@ function App() {
         <a href="#top">בחזרה למעלה ↑</a>
       </footer>
 
-      {selectedImageProduct && (
+      {selectedProduct && (
         <div
-          className="image-lightbox"
+          className="product-details-overlay"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) {
-              setSelectedImageProduct(null);
+              setSelectedProduct(null);
             }
           }}
         >
           <section
-            className="image-lightbox-dialog"
+            className="product-details-dialog"
             role="dialog"
             aria-modal="true"
-            aria-labelledby="product-image-title"
+            aria-labelledby="product-details-title"
           >
-            <header className="image-lightbox-header">
+            <header className="product-details-header">
               <div>
-                <p className="eyebrow section-eyebrow">
-                  מק״ט {selectedImageProduct.sku}
-                </p>
-                <h2 id="product-image-title">
-                  {selectedImageProduct.description}
+                <p className="eyebrow section-eyebrow">פרטי מוצר</p>
+                <h2 id="product-details-title">
+                  {selectedProduct.description}
                 </h2>
               </div>
               <button
                 className="cart-close"
                 type="button"
                 autoFocus
-                aria-label="סגירת תמונת המוצר"
-                onClick={() => setSelectedImageProduct(null)}
+                aria-label="סגירת פרטי המוצר"
+                onClick={() => setSelectedProduct(null)}
               >
                 ×
               </button>
             </header>
-            <img
-              className="lightbox-product-image"
-              src={productImageBySku[selectedImageProduct.sku]}
-              alt={selectedImageProduct.description}
-            />
+            <div className="product-details-layout">
+              <div className="product-detail-image-frame">
+                {productImageBySku[selectedProduct.sku] ? (
+                  <img
+                    className="product-detail-image"
+                    src={productImageBySku[selectedProduct.sku]}
+                    alt={selectedProduct.description}
+                  />
+                ) : (
+                  <div className="product-detail-placeholder">
+                    <span aria-hidden="true">✳</span>
+                    {categoryLabels[getCategory(selectedProduct.description)]}
+                  </div>
+                )}
+              </div>
+              <div className="product-detail-info">
+                <dl className="product-detail-specs">
+                  <div>
+                    <dt>מק״ט</dt>
+                    <dd>{selectedProduct.sku}</dd>
+                  </div>
+                  <div>
+                    <dt>אריזה</dt>
+                    <dd>{selectedProduct.capacity || "לא צוינה"}</dd>
+                  </div>
+                  <div>
+                    <dt>ברקוד</dt>
+                    <dd>{selectedProduct.barcode || "לא צוין"}</dd>
+                  </div>
+                  <div>
+                    <dt>מחיר ליחידה</dt>
+                    <dd>
+                      {selectedProductPrice === null
+                        ? "לא זמין"
+                        : formatCurrency(selectedProductPrice)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>כפולת הזמנה</dt>
+                    <dd>
+                      {getOrderMultiple(selectedProduct.capacity)} יחידות
+                    </dd>
+                  </div>
+                </dl>
+
+                {selectedProductVariants.length > 1 && (
+                  <div className="related-products">
+                    <h3>אפשרויות נוספות</h3>
+                    <div className="related-product-list">
+                      {selectedProductVariants.map((variant) => (
+                        <button
+                          className={`related-product-option${variant.sku === selectedProduct.sku ? " active" : ""}`}
+                          key={variant.sku}
+                          type="button"
+                          aria-pressed={variant.sku === selectedProduct.sku}
+                          onClick={() => setSelectedProduct(variant)}
+                        >
+                          <span>{variant.description}</span>
+                          <small>מק״ט {variant.sku}</small>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <button
+                  className="product-detail-add"
+                  type="button"
+                  onClick={() => addToCart(selectedProduct)}
+                >
+                  <span>
+                    {selectedProductQuantity > 0
+                      ? `הוספת אריזה לעגלה · בעגלה ${selectedProductQuantity}`
+                      : "הוספה לעגלה"}
+                  </span>
+                  <small>
+                    כפולות של {getOrderMultiple(selectedProduct.capacity)}
+                  </small>
+                </button>
+              </div>
+            </div>
           </section>
         </div>
       )}
