@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import productsData from "./data/products.json";
+import productImages from "./data/product-images.json";
 import {
   downloadCartExcel,
   printCartAsPdf,
@@ -30,12 +31,7 @@ type CategoryId =
   | "other";
 
 const products: Product[] = productsData;
-const productImageBySku: Record<string, string> = {
-  "0230.4": "/products/0230.4.png",
-  "0294": "/products/0294.png",
-  "0657": "/products/0657.png",
-  "0654": "/products/0654.png",
-};
+const productImageBySku: Record<string, string> = productImages;
 const PAGE_SIZE = 24;
 
 const categoryLabels: Record<CategoryId, string> = {
