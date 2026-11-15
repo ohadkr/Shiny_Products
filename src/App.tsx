@@ -1109,16 +1109,6 @@ function App() {
           </a>
           <div className="header-actions">
             <button
-              className="header-link login-placeholder"
-              type="button"
-              disabled
-              title="ההתחברות תתווסף בהמשך"
-              aria-label="התחברות לאתר, בקרוב"
-            >
-              <span>התחברות</span>
-              <span className="login-coming-soon">בקרוב</span>
-            </button>
-            <button
               className="cart-toggle"
               type="button"
               onClick={() => setCartOpen(true)}
